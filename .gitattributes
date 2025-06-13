@@ -1,0 +1,2 @@
+models/onnx_model_s/model.onnx filter=lfs diff=lfs merge=lfs -text
+models/pytorch_model/model.safetensors filter=lfs diff=lfs merge=lfs -text

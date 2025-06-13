@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  wildberries-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: wb-review-analyzer
+    ports:
+      - "8000:8000"
+    environment:
+      # Настройки приложения
+      - DEBUG=false
+      - APP_NAME=Wildberries Review Analyzer
+      - APP_VERSION=1.0.0
+      
+      # Настройки модели
+      - MODEL_PATH=models/onnx_model
+      - MAX_TEXT_LENGTH=512
+      - BATCH_SIZE=32
+      
+      # Настройки кэширования
+      - CACHE_PREDICTIONS=true
+      - CACHE_TTL=3600
+    volumes:
+      # Монтируем директорию с моделями (если нужно обновлять модели извне)
+      - ./models:/app/models:ro
+      
+      # Монтируем логи для отладки
+      - ./logs:/app/logs
+      
+      # Временная директория для обработки файлов
+      - ./temp:/app/temp
+    networks:
+      - wb-analyzer-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G  
+          cpus: '2.0'
+        reservations:
+          memory: 2G  
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s  
+
+networks:
+  wb-analyzer-network:
+    driver: bridge
+
+volumes:
+  wb-models:
+    driver: local
+  wb-logs:
+    driver: local
