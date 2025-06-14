@@ -19,17 +19,6 @@ logger = logging.getLogger(__name__)
 # Создаем роутер
 router = APIRouter()
 
-@router.on_event("startup")
-async def startup_event():
-    """Инициализация при запуске API"""
-    try:
-        logger.info("Загрузка модели анализа тональности...")
-        sentiment_model.load_model()
-        logger.info("Модель успешно загружена")
-    except Exception as e:
-        logger.error(f"Ошибка загрузки модели: {e}")
-        # Продолжаем работу, но отмечаем что модель не загружена
-
 @router.post("/analyze", response_model=ReviewResponse)
 async def analyze_review(request: ReviewRequest) -> ReviewResponse:
     """

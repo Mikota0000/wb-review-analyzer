@@ -1,5 +1,13 @@
-# Оптимизированный Dockerfile для больших ML моделей
+# Оптимизированный Dockerfile для больших ML моделей с uv
 FROM python:3.11-slim as builder
+
+# Метаданные образа
+LABEL maintainer="your-email@example.com"
+LABEL version="1.0"
+LABEL description="Wildberries Review Analyzer API with Large ML Model"
+
+# Установка uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # Установка системных зависимостей для сборки
 RUN apt-get update && apt-get install -y \
@@ -9,24 +17,22 @@ RUN apt-get update && apt-get install -y \
     wget --fix-missing \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем requirements.txt
-COPY requirements.txt .
+# Создание рабочей директории
+WORKDIR /app
 
-# Создаем виртуальное окружение и устанавливаем зависимости
-RUN python -m venv /opt/venv
+# Копирование файлов конфигурации
+COPY pyproject.toml .python-version ./
+
+# Создание виртуального окружения и установка зависимостей
+RUN uv venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Установка зависимостей с оптимизацией для ML
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --no-cache -e .[production]
 
-# Производственный образ
+# Production stage
 FROM python:3.11-slim as production
-
-# Метаданные образа
-LABEL maintainer="your-email@example.com"
-LABEL version="1.0"
-LABEL description="Wildberries Review Analyzer API with Large ML Model"
 
 # Установка системных зависимостей для runtime
 RUN apt-get update && apt-get install -y \
@@ -36,23 +42,24 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Копируем виртуальное окружение из builder stage
+# Копирование виртуального окружения из builder stage
 COPY --from=builder /opt/venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Создаем пользователя для безопасности
+# Создание пользователя для безопасности
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# Создаем рабочую директорию
+# Создание рабочей директории
 WORKDIR /app
 
-# Копируем код приложения (сначала код, чтобы не пересобирать при изменении модели)
+# Копирование кода приложения (сначала код, чтобы не пересобирать при изменении модели)
 COPY app/ ./app/
 
-# Создаем необходимые директории
+# Создание необходимых директорий
 RUN mkdir -p logs temp models
 
-# Копируем большую модель в отдельном слое (для оптимизации Docker layer cache)
+# Копирование большой модели в отдельном слое (для оптимизации Docker layer cache)
 COPY models/ ./models/
 
 # Оптимизация для больших файлов: проверяем размер модели
@@ -73,13 +80,15 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONHASHSEED=random
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONPATH=/app
 
 # Настройки для ONNX Runtime
 ENV OMP_NUM_THREADS=2
 ENV ONNXRUNTIME_LOG_SEVERITY_LEVEL=3
 
+# Health check с увеличенным временем для ML модели
 HEALTHCHECK --interval=60s --timeout=60s --start-period=180s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
 # Команда запуска с оптимизацией памяти
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

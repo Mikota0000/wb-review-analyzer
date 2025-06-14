@@ -14,22 +14,22 @@ services:
       - DEBUG=false
       - APP_NAME=Wildberries Review Analyzer
       - APP_VERSION=1.0.0
-      
+     
       # Настройки модели
-      - MODEL_PATH=models/onnx_model
+      - MODEL_PATH=models/onnx_model_s
       - MAX_TEXT_LENGTH=512
       - BATCH_SIZE=32
-      
+     
       # Настройки кэширования
       - CACHE_PREDICTIONS=true
       - CACHE_TTL=3600
     volumes:
       # Монтируем директорию с моделями (если нужно обновлять модели извне)
       - ./models:/app/models:ro
-      
+     
       # Монтируем логи для отладки
       - ./logs:/app/logs
-      
+     
       # Временная директория для обработки файлов
       - ./temp:/app/temp
     networks:
@@ -48,7 +48,31 @@ services:
       interval: 60s
       timeout: 30s
       retries: 3
-      start_period: 120s  
+      start_period: 120s
+
+  # Для разработки с uv
+  wildberries-analyzer-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: wb-review-analyzer-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=true
+      - APP_NAME=Wildberries Review Analyzer
+      - APP_VERSION=1.0.0-dev
+      - MODEL_PATH=models/onnx_model_s
+      - MAX_TEXT_LENGTH=512
+      - BATCH_SIZE=16  # Меньший batch для разработки
+    volumes:
+      - .:/app
+      - /app/.venv  # исключаем виртуальное окружение из bind mount
+    networks:
+      - wb-analyzer-network
+    profiles:
+      - dev
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 networks:
   wb-analyzer-network:

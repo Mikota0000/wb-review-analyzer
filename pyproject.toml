@@ -1,0 +1,245 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wildberries-review-analyzer"
+version = "1.0.0"
+description = "API для анализа тональности отзывов с Wildberries"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "mikoto0000", email = "mr.plyushka.rial@gmail.com"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Основные зависимости (на основе requirements.txt)
+dependencies = [
+    # Web framework
+    "fastapi==0.115.12",
+    "uvicorn==0.34.3",
+    "starlette==0.46.2",
+    
+    # Data validation
+    "pydantic==2.11.5",
+    "pydantic-settings==2.9.1",
+    "pydantic-core==2.33.2",
+    
+    # ML and NLP
+    "transformers==4.51.3",
+    "onnx==1.18.0",
+    "onnxruntime==1.22.0",
+    "optimum==1.25.3",
+    "tokenizers==0.21.1",
+    "safetensors==0.5.3",
+    "accelerate==1.7.0",
+    
+    # Scientific computing
+    "numpy==2.1.2",
+    "scipy==1.15.3",
+    "scikit-learn==1.7.0",
+    "pandas==2.3.0",
+    
+    # Data processing
+    "datasets==3.6.0",
+    "pyarrow==20.0.0",
+    "dill==0.3.8",
+    "multiprocess==0.70.16",
+    "xxhash==3.5.0",
+    
+    # Networking and HTTP
+    "aiohttp==3.12.11",
+    "aiosignal==1.3.2",
+    "aiohappyeyeballs==2.6.1",
+    "requests==2.32.3",
+    "urllib3==2.4.0",
+    "certifi==2025.4.26",
+    "charset-normalizer==3.4.2",
+    "idna==3.10",
+    
+    # Utilities
+    "click==8.2.1",
+    "colorama==0.4.6",
+    "coloredlogs==15.0.1",
+    "humanfriendly==10.0",
+    "tqdm==4.67.1",
+    "psutil==7.0.0",
+    "filelock==3.13.1",
+    "fsspec==2024.6.1",
+    
+    # Template and markup
+    "Jinja2==3.1.3",
+    "MarkupSafe==2.1.5",
+    
+    # Configuration and environment
+    "python-dotenv==1.1.0",
+    "PyYAML==6.0.2",
+    
+    # Date and time
+    "python-dateutil==2.9.0.post0",
+    "pytz==2025.2",
+    "tzdata==2025.2",
+    
+    # Other dependencies
+    "anyio==4.9.0",
+    "sniffio==1.3.1",
+    "attrs==25.3.0",
+    "frozenlist==1.6.2",
+    "multidict==6.4.4",
+    "propcache==0.3.1",
+    "yarl==1.20.0",
+    "protobuf==6.31.1",
+    "packaging==25.0",
+    "pillow==11.0.0",
+    "flatbuffers==25.2.10",
+    "h11==0.16.0",
+    "huggingface-hub==0.32.4",
+    "joblib==1.5.1",
+    "mpmath==1.3.0",
+    "networkx==3.3",
+    "regex==2024.11.6",
+    "six==1.17.0",
+    "sympy==1.13.1",
+    "threadpoolctl==3.6.0",
+    "typing-extensions==4.14.0",
+    "typing-inspection==0.4.1",
+    "annotated-types==0.7.0",
+]
+
+# Дополнительные группы зависимостей
+[project.optional-dependencies]
+# Для разработки
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.0",  # для тестов API
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+]
+
+# Для обучения моделей
+training = [
+    "jupyter>=1.0.0",
+    "matplotlib>=3.7.0",
+    "seaborn>=0.12.0",
+    "plotly>=5.17.0",
+    "datasets>=2.14.0",
+    "evaluate>=0.4.0",
+]
+
+# Для продакшена (добавляем gunicorn для production сервера)
+production = [
+    "gunicorn>=21.2.0",
+]
+
+# Все зависимости сразу
+all = [
+    "wildberries-review-analyzer[dev,training,production]"
+]
+
+[project.urls]
+Homepage = "https://github.com/mikoto0000/wildberries-review-analyzer"
+Repository = "https://github.com/mikoto0000/wildberries-review-analyzer.git"
+Issues = "https://github.com/mikoto0000/wildberries-review-analyzer/issues"
+
+# Настройки для ruff (линтер и форматер)
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"scripts/*" = ["T201"]  # allow print in scripts
+
+[tool.ruff.isort]
+known-first-party = ["app"]
+
+# Настройки для pytest
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+
+# Настройки для coverage
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+]
+
+# Настройки для mypy
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "transformers.*",
+    "torch.*",
+    "onnxruntime.*",
+    "optimum.*",
+    "sentence_transformers.*",
+]
+ignore_missing_imports = true
+
+# Настройки для hatchling build system
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# Опционально: если хотите включить дополнительные файлы
+[tool.hatch.build.targets.sdist]
+include = [
+    "app/",
+    "README.md",
+    "pyproject.toml",
+    "requirements.txt",
+]
