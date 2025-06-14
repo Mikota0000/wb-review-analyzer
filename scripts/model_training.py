@@ -6,6 +6,7 @@ import csv
 import json
 import pandas as pd
 import numpy as np
+import logging
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
@@ -20,6 +21,17 @@ from transformers import (
 from optimum.onnxruntime import ORTModelForSequenceClassification
 import warnings
 warnings.filterwarnings('ignore')
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('training.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # "cointegrated/rubert-tiny2" - текущая, быстрая.
 # "DeepPavlov/rubert-base-cased" - классический BERT
@@ -48,12 +60,12 @@ def check_gpu():
         device = torch.device("cuda")
         gpu_name = torch.cuda.get_device_name(0)
         gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
-        print(f"✅ GPU доступен: {gpu_name}")
-        print(f"   Память GPU: {gpu_memory:.1f} GB")
-        print(f"   CUDA версия: {torch.version.cuda}")
+        logger.info(f"GPU доступен: {gpu_name}")
+        logger.info(f"Память GPU: {gpu_memory:.1f} GB")
+        logger.info(f"CUDA версия: {torch.version.cuda}")
         return device
     else:
-        print("❌ GPU недоступен, используется CPU")
+        logger.warning("GPU недоступен, используется CPU")
         return torch.device("cpu")
 
 class OptimizedWildberriesDataset(torch.utils.data.Dataset):
@@ -89,7 +101,7 @@ class OptimizedWildberriesDataset(torch.utils.data.Dataset):
 
 def load_and_prepare_data(data_path: Path, sample_size=None):
     """Загрузка и подготовка данных из CSV-файла с оптимизацией"""
-    print("Загрузка данных из CSV...")
+    logger.info("Загрузка данных из CSV...")
 
     data = []
     with open(data_path, 'r', encoding='utf-8') as f:
@@ -112,16 +124,17 @@ def load_and_prepare_data(data_path: Path, sample_size=None):
                     break
             except (IndexError, ValueError) as e:
                 # Пропускаем строки с ошибками или неверным форматом
-                print(f"Пропущена строка из-за ошибки формата: {row}. Ошибка: {e}")
+                logger.warning(f"Пропущена строка из-за ошибки формата: {row}. Ошибка: {e}")
                 continue
 
     df = pd.DataFrame(data)
     if df.empty:
         raise ValueError("Данные не были загружены. Проверьте формат CSV и путь к файлу.")
 
-    print(f"Загружено {len(df)} отзывов")
-    print("Распределение по оценкам:")
-    print(df['rating'].value_counts().sort_index())
+    logger.info(f"Загружено {len(df)} отзывов")
+    logger.info("Распределение по оценкам:")
+    for rating, count in df['rating'].value_counts().sort_index().items():
+        logger.info(f"  Оценка {rating}: {count} отзывов")
 
     # Создаем метки тональности
     def rating_to_sentiment(rating):
@@ -133,16 +146,16 @@ def load_and_prepare_data(data_path: Path, sample_size=None):
             return 2  # Позитивный
 
     df['sentiment'] = df['rating'].apply(rating_to_sentiment)
-    print("\nРаспределение по тональности:")
+    logger.info("Распределение по тональности:")
     sentiment_names = {0: 'Негативный', 1: 'Нейтральный', 2: 'Позитивный'}
     for i, count in df['sentiment'].value_counts().sort_index().items():
-        print(f"{sentiment_names[i]}: {count}")
+        logger.info(f"  {sentiment_names[i]}: {count}")
 
     return df
 
 def train_optimized_model(df: pd.DataFrame, model_output_dir: Path, base_model_name: str, device):
     """Оптимизированное обучение модели с GPU"""
-    print(f"\nИнициализация модели: {base_model_name}...")
+    logger.info(f"Инициализация модели: {base_model_name}...")
     
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -153,7 +166,7 @@ def train_optimized_model(df: pd.DataFrame, model_output_dir: Path, base_model_n
     
     # Перемещаем модель на GPU
     model.to(device)
-    print(f"Модель перемещена на: {device}")
+    logger.info(f"Модель перемещена на: {device}")
     
     # Разделение данных
     X_train, X_test, y_train, y_test = train_test_split(
@@ -164,8 +177,8 @@ def train_optimized_model(df: pd.DataFrame, model_output_dir: Path, base_model_n
         stratify=df['sentiment']
     )
     
-    print(f"Обучающая выборка: {len(X_train)}")
-    print(f"Тестовая выборка: {len(X_test)}")
+    logger.info(f"Обучающая выборка: {len(X_train)}")
+    logger.info(f"Тестовая выборка: {len(X_test)}")
     
     # Создание датасетов
     train_dataset = OptimizedWildberriesDataset(X_train, y_train, tokenizer, max_length=MAX_TEXT_LENGTH)
@@ -206,9 +219,9 @@ def train_optimized_model(df: pd.DataFrame, model_output_dir: Path, base_model_n
         data_collator=DataCollatorWithPadding(tokenizer=tokenizer),
     )
     
-    print("\nНачало обучения...")
-    print(f"Параметры: batch_size={training_args.per_device_train_batch_size}, "
-              f"epochs={training_args.num_train_epochs}, fp16={training_args.fp16}")
+    logger.info("Начало обучения...")
+    logger.info(f"Параметры: batch_size={training_args.per_device_train_batch_size}, "
+                f"epochs={training_args.num_train_epochs}, fp16={training_args.fp16}")
     
     # Измеряем время обучения
     import time
@@ -218,21 +231,21 @@ def train_optimized_model(df: pd.DataFrame, model_output_dir: Path, base_model_n
     
     end_time = time.time()
     training_time = end_time - start_time
-    print(f"\n⏱️ Время обучения: {training_time/60:.1f} минут")
+    logger.info(f"Время обучения: {training_time/60:.1f} минут")
     
     # Оценка модели
-    print("\nОценка модели...")
+    logger.info("Оценка модели...")
     predictions = trainer.predict(test_dataset)
     y_pred = np.argmax(predictions.predictions, axis=1)
     
     sentiment_names = ['Негативный', 'Нейтральный', 'Позитивный']
-    print("\nОтчет по классификации:")
-    print(classification_report(y_test, y_pred, target_names=sentiment_names))
+    logger.info("Отчет по классификации:")
+    logger.info(f"\n{classification_report(y_test, y_pred, target_names=sentiment_names)}")
     
     # Сохранение модели PyTorch
     # Создаем уникальную папку для каждой обученной модели
     model_save_path = model_output_dir / base_model_name.replace("/", "_") 
-    print(f"\nСохранение PyTorch модели в {model_save_path}...")
+    logger.info(f"Сохранение PyTorch модели в {model_save_path}...")
     model_save_path.mkdir(parents=True, exist_ok=True)
     trainer.save_model(str(model_save_path)) 
     tokenizer.save_pretrained(str(model_save_path)) 
@@ -241,7 +254,7 @@ def train_optimized_model(df: pd.DataFrame, model_output_dir: Path, base_model_n
 
 def convert_to_onnx_optimized(model, tokenizer, pytorch_model_path: Path):
     """Оптимизированная конвертация в ONNX"""
-    print("\nКонвертация в ONNX...")
+    logger.info("Конвертация в ONNX...")
     
     onnx_output_path = pytorch_model_path / "onnx_model" 
     onnx_output_path.mkdir(exist_ok=True)
@@ -261,39 +274,46 @@ def convert_to_onnx_optimized(model, tokenizer, pytorch_model_path: Path):
         ort_model.save_pretrained(str(onnx_output_path))
         tokenizer.save_pretrained(str(onnx_output_path))
         
-        print(f"ONNX модель сохранена в {onnx_output_path}")
+        logger.info(f"ONNX модель сохранена в {onnx_output_path}")
         return onnx_output_path
         
     except Exception as e:
-        print(f"Ошибка при конвертации в ONNX: {e}")
+        logger.error(f"Ошибка при конвертации в ONNX: {e}")
         return None
 
 def main():
     """Основная функция с оптимизациями"""
+    logger.info("Запуск обучения модели анализа тональности")
+    
     # Проверяем GPU
     device = check_gpu()
     
     # Проверяем наличие данных
     if not DATA_PATH.exists():
-        print(f"Файл с данными не найден: {DATA_PATH}")
-        print("Создайте файл data/wildberries_reviews.csv с вашими отзывами")
-        print("или измените путь DATA_PATH в начале скрипта.")
+        logger.error(f"Файл с данными не найден: {DATA_PATH}")
+        logger.error("Создайте файл data/wildberries_reviews.csv с вашими отзывами")
+        logger.error("или измените путь DATA_PATH в начале скрипта.")
         return
     
-    # Загрузка данных
-    df = load_and_prepare_data(DATA_PATH) # Все данные
-    
-    # Обучение модели
-    model, tokenizer, pytorch_model_path = train_optimized_model(df, MODELS_DIR, BASE_MODEL_NAME, device)
-    
-    # Конвертация в ONNX
-    # Передаем путь к сохраненной PyTorch модели
-    onnx_path = convert_to_onnx_optimized(model, tokenizer, pytorch_model_path)
-    
-    if onnx_path:
-        print(f"\n✅ Модель готова! ONNX файлы находятся в: {onnx_path}")
-    else:
-        print("\n⚠️ Модель обучена, но ONNX конвертация не удалась")
+    try:
+        # Загрузка данных
+        df = load_and_prepare_data(DATA_PATH) # Все данные
+        
+        # Обучение модели
+        model, tokenizer, pytorch_model_path = train_optimized_model(df, MODELS_DIR, BASE_MODEL_NAME, device)
+        
+        # Конвертация в ONNX
+        # Передаем путь к сохраненной PyTorch модели
+        onnx_path = convert_to_onnx_optimized(model, tokenizer, pytorch_model_path)
+        
+        if onnx_path:
+            logger.info(f"Модель готова! ONNX файлы находятся в: {onnx_path}")
+        else:
+            logger.warning("Модель обучена, но ONNX конвертация не удалась")
+            
+    except Exception as e:
+        logger.error(f"Критическая ошибка при обучении модели: {e}")
+        raise
 
 if __name__ == "__main__":
     main()
